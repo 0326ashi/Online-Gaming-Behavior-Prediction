@@ -1,0 +1,6 @@
+file names
+
+logistic_regression.ipynb
+decision_tree.ipynb
+random_forest.ipynb
+svm.ipynb
