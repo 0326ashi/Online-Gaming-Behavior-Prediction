@@ -3,6 +3,7 @@ import numpy as np
 
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
+from imblearn.over_sampling import SMOTE
 
 
 def load_data(path):
@@ -93,9 +94,6 @@ def scale_features(X):
 
 
 def preprocess_data(path, target_column='EngagementLevel', test_size=0.2):
-    """
-    Full preprocessing pipeline
-    """
 
     # Load data
     df = load_data(path)
@@ -109,31 +107,46 @@ def preprocess_data(path, target_column='EngagementLevel', test_size=0.2):
     # Feature engineering
     df = feature_engineering(df)
 
-    # Identify numerical columns
-    numerical_cols = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
+    # Check target column exists
+    if target_column not in df.columns:
+        raise ValueError(f"{target_column} not found in dataset")
 
-    # Remove target column from numerical list if present
-    if target_column in numerical_cols:
-        numerical_cols.remove(target_column)
-
-    # Remove outliers
-    df = remove_outliers(df, numerical_cols)
-
-    # Encode categorical
-    df = encode_categorical(df)
-
-    # Split features and target
+    # Split BEFORE encoding/outliers (VERY IMPORTANT)
     X = df.drop(columns=[target_column])
     y = df[target_column]
 
-    # Split first
     X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=test_size, random_state=42, stratify=y
+        X, y, test_size=test_size, random_state=42, stratify=y
     )
 
-    # Scale split
-    scaler = StandardScaler()
-    X_train = pd.DataFrame(scaler.fit_transform(X_train), columns=X.columns)
-    X_test = pd.DataFrame(scaler.transform(X_test), columns=X.columns)
+    # Encode categorical using get_dummies (SAFE)
+    X_train = pd.get_dummies(X_train, drop_first=True)
+    X_test = pd.get_dummies(X_test, drop_first=True)
 
-    return X_train, X_test, y_train, y_test
+    # Align columns (IMPORTANT)
+    X_train, X_test = X_train.align(X_test, join='left', axis=1, fill_value=0)
+
+    # Identify numerical columns
+    numerical_cols = X_train.select_dtypes(include=['int64', 'float64']).columns
+
+    # Remove outliers ONLY from training data
+    X_train = remove_outliers(X_train, numerical_cols)
+
+    # Also adjust y_train accordingly
+    y_train = y_train.loc[X_train.index]
+
+    # Scaling
+    scaler = StandardScaler()
+    X_train_scaled = pd.DataFrame(
+        scaler.fit_transform(X_train), columns=X_train.columns
+    )
+
+    X_test_scaled = pd.DataFrame(
+        scaler.transform(X_test), columns=X_test.columns
+    )
+
+    # Handle class imbalance (SMOTE)
+    smote = SMOTE(random_state=42)
+    X_train_final, y_train_final = smote.fit_resample(X_train_scaled, y_train)
+
+    return X_train_final, X_test_scaled, y_train_final, y_test
