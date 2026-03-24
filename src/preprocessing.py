@@ -24,13 +24,20 @@ def drop_irrelevant_features(df):
 
 def handle_missing_values(df):
     """
-    Fill missing values
+    Fix data types and fill missing values properly
     """
+
     for col in df.columns:
+
+        # Try converting to numeric if possible
+        df[col] = pd.to_numeric(df[col], errors='ignore')
+
+        # If still object → categorical
         if df[col].dtype == 'object':
             df[col] = df[col].fillna(df[col].mode()[0])
         else:
             df[col] = df[col].fillna(df[col].median())
+
     return df
 
 
