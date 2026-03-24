@@ -29,17 +29,15 @@ def handle_missing_values(df):
 
     for col in df.columns:
 
-        # Try converting to numeric if possible
-        df[col] = pd.to_numeric(df[col], errors='ignore')
-
-        # If still object → categorical
-        if df[col].dtype == 'object':
+        # Treat all text-like columns as categorical
+        if pd.api.types.is_string_dtype(df[col]) or df[col].dtype == 'object':
             df[col] = df[col].fillna(df[col].mode()[0])
+
         else:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
             df[col] = df[col].fillna(df[col].median())
 
     return df
-
 
 def remove_outliers(df, numerical_cols):
     """
@@ -86,9 +84,11 @@ def scale_features(X):
     Standardize numerical features
     """
     scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+    X_scaled = pd.DataFrame(
+        scaler.fit_transform(X),
+        columns=X.columns
+    )
     return X_scaled
-
 
 def preprocess_data(path, target_column='EngagementLevel', test_size=0.2):
     """
