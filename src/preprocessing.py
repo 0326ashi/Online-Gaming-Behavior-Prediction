@@ -1,23 +1,60 @@
-# Sample src/preprocessing.py
-
 import pandas as pd
-from sklearn.model_selection import train_test_split
+import numpy as np
+
 from sklearn.preprocessing import StandardScaler, LabelEncoder
-from imblearn.over_sampling import SMOTE
+from sklearn.model_selection import train_test_split
 
 
-def load_data(file_path):
-    df = pd.read_csv(file_path)
+def load_data(path):
+    """
+    Load dataset from CSV
+    """
+    df = pd.read_csv(path)
+    return df
+
+
+def drop_irrelevant_features(df):
+    """
+    Remove unnecessary columns
+    """
+    if 'PlayerID' in df.columns:
+        df = df.drop(columns=['PlayerID'])
     return df
 
 
 def handle_missing_values(df):
-    # Simple strategy (you can improve if needed)
-    df = df.dropna()
+    """
+    Fill missing values
+    """
+    for col in df.columns:
+        if df[col].dtype == 'object':
+            df[col] = df[col].fillna(df[col].mode()[0])
+        else:
+            df[col] = df[col].fillna(df[col].median())
+    return df
+
+
+def remove_outliers(df, numerical_cols):
+    """
+    Remove outliers using IQR method
+    """
+    for col in numerical_cols:
+        Q1 = df[col].quantile(0.25)
+        Q3 = df[col].quantile(0.75)
+        IQR = Q3 - Q1
+
+        lower = Q1 - 1.5 * IQR
+        upper = Q3 + 1.5 * IQR
+
+        df = df[(df[col] >= lower) & (df[col] <= upper)]
+
     return df
 
 
 def encode_categorical(df):
+    """
+    Convert categorical features to numeric
+    """
     le = LabelEncoder()
     for col in df.select_dtypes(include=['object']).columns:
         df[col] = le.fit_transform(df[col])
@@ -25,69 +62,67 @@ def encode_categorical(df):
 
 
 def feature_engineering(df):
-    # Example feature (modify based on dataset)
-    if 'Hours_Played' in df.columns and 'Sessions_Per_Week' in df.columns:
-        df['Engagement_Score'] = df['Hours_Played'] * df['Sessions_Per_Week']
+    """
+    Create new useful features
+    """
+    # Example feature: total weekly playtime
+    if 'AvgSessionDurationMinutes' in df.columns and 'SessionsPerWeek' in df.columns:
+        df['TotalWeeklyPlayTime'] = (
+            df['AvgSessionDurationMinutes'] * df['SessionsPerWeek']
+        )
+
     return df
 
 
-def split_data(df, target_column):
-    X = df.drop(target_column, axis=1)
-    y = df[target_column]
-
-    return train_test_split(
-        X, y,
-        test_size=0.2,
-        random_state=42,
-        stratify=y
-    )
-
-
-def apply_smote(X_train, y_train):
-    smote = SMOTE(random_state=42)
-    return smote.fit_resample(X_train, y_train)
-
-
-def scale_data(X_train, X_test):
+def scale_features(X):
+    """
+    Standardize numerical features
+    """
     scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
-    return X_train_scaled, X_test_scaled
+    X_scaled = scaler.fit_transform(X)
+    return X_scaled
 
 
-def full_preprocessing_pipeline(file_path, target_column, scale=True):
-    # Load
-    df = load_data(file_path)
+def preprocess_data(path, target_column='EngagementLevel', test_size=0.2):
+    """
+    Full preprocessing pipeline
+    """
 
-    # Preprocessing
+    # Load data
+    df = load_data(path)
+
+    # Drop unnecessary columns
+    df = drop_irrelevant_features(df)
+
+    # Handle missing values
     df = handle_missing_values(df)
-    df = encode_categorical(df)
+
+    # Feature engineering
     df = feature_engineering(df)
 
-    # Split
-    X_train, X_test, y_train, y_test = split_data(df, target_column)
+    # Identify numerical columns
+    numerical_cols = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
 
-    # SMOTE (only train)
-    X_train, y_train = apply_smote(X_train, y_train)
+    # Remove target column from numerical list if present
+    if target_column in numerical_cols:
+        numerical_cols.remove(target_column)
 
-    # Scaling (optional)
-    if scale:
-        X_train, X_test = scale_data(X_train, X_test)
+    # Remove outliers
+    df = remove_outliers(df, numerical_cols)
 
-    return X_train, X_test, y_train, y_test, df
+    # Encode categorical
+    df = encode_categorical(df)
 
+    # Split features and target
+    X = df.drop(columns=[target_column])
+    y = df[target_column]
 
-# How to Use in Notebooks
-# At the top of each notebook:
+    # Scale features
+    X = scale_features(X)
 
-# import sys
-# sys.path.append('../src')
+    # Train-test split
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=42, stratify=y
+    )
 
-# from preprocessing import full_preprocessing_pipeline
-
-# Example Usage (IMPORTANT)
-# X_train, X_test, y_train, y_test, df = full_preprocessing_pipeline(
-#     file_path="../data/online_gaming_behavior_dataset.csv",
-#     target_column="your_target_column_name",
-#     scale=True   # True for LR & SVM
-# )
+    return X_train, X_test, y_train, y_test
