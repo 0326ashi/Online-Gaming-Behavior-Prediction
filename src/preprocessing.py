@@ -39,6 +39,7 @@ def handle_missing_values(df):
 
     return df
 
+
 def remove_outliers(df, numerical_cols):
     """
     Remove outliers using IQR method
@@ -90,6 +91,7 @@ def scale_features(X):
     )
     return X_scaled
 
+
 def preprocess_data(path, target_column='EngagementLevel', test_size=0.2):
     """
     Full preprocessing pipeline
@@ -124,12 +126,14 @@ def preprocess_data(path, target_column='EngagementLevel', test_size=0.2):
     X = df.drop(columns=[target_column])
     y = df[target_column]
 
-    # Scale features
-    X = scale_features(X)
-
-    # Train-test split
+    # Split first
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=42, stratify=y
+    X, y, test_size=test_size, random_state=42, stratify=y
     )
+
+    # Scale split
+    scaler = StandardScaler()
+    X_train = pd.DataFrame(scaler.fit_transform(X_train), columns=X.columns)
+    X_test = pd.DataFrame(scaler.transform(X_test), columns=X.columns)
 
     return X_train, X_test, y_train, y_test
